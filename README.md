@@ -1,22 +1,38 @@
 # fish-speech-api
 
-A Docker image that runs the [Fish Speech S2 Pro](https://huggingface.co/fishaudio/s2-pro) TTS API server, with the model weights baked in at build time.
+A Docker image that runs the [Fish Speech S2 Pro](https://huggingface.co/fishaudio/s2-pro) TTS API server. Model weights live on the host and are bind-mounted into the container at runtime, so the image stays small and the same image works with any checkpoint.
 
 ## How it works
 
-The image builds on `fishaudio/fish-speech:server-cuda`, downloads the `fishaudio/s2-pro` checkpoints during the build, and starts `tools/api_server.py` on container start. The server listens on port `8080` and exposes the standard Fish Speech HTTP API (`/v1/tts`, `/v1/asr`, `/v1/health`, ...).
+The image builds on `fishaudio/fish-speech:server-cuda` and starts `tools/api_server.py` on container start, reading checkpoints from `/app/checkpoints`. The server listens on port `8080` and exposes the standard Fish Speech HTTP API (`/v1/tts`, `/v1/asr`, `/v1/health`, ...).
 
-## Build
+## Setup
+
+### 1. Download the checkpoints on the host
+
+Fetch them once into `./checkpoints/s2-pro` (gitignored):
+
+```bash
+pip install -U "huggingface_hub[cli]"
+hf download fishaudio/s2-pro --local-dir ./checkpoints/s2-pro
+```
+
+### 2. Build the image
 
 ```bash
 docker build -t fish-speech-api .
 ```
 
-## Run (requires NVIDIA GPU)
+### 3. Run (requires NVIDIA GPU)
 
 ```bash
-docker run --gpus all -p 8080:8080 fish-speech-api
+docker run --gpus all \
+    -p 8080:8080 \
+    -v "$(pwd)/checkpoints:/app/checkpoints" \
+    fish-speech-api
 ```
+
+The container exits with an explanatory error if the mount is missing or the checkpoints aren't where it expects them.
 
 ### Configuration
 
@@ -26,11 +42,19 @@ Override the defaults with environment variables:
 |----------|---------|-------------|
 | `LISTEN` | `0.0.0.0:8080` | Host and port the API server binds to |
 | `DEVICE` | `cuda` | Torch device (`cuda`, `cpu`, ...) |
-| `LLAMA_CHECKPOINT_PATH` | `/app/checkpoints/s2-pro` | Path to the LLaMA checkpoint directory |
-| `DECODER_CHECKPOINT_PATH` | `/app/checkpoints/s2-pro/codec.pth` | Path to the decoder checkpoint |
+| `LLAMA_CHECKPOINT_PATH` | `/app/checkpoints/s2-pro` | Path to the LLaMA checkpoint directory (in-container) |
+| `DECODER_CHECKPOINT_PATH` | `/app/checkpoints/s2-pro/codec.pth` | Path to the decoder checkpoint (in-container) |
+
+The checkpoint paths are container-side, so a different mount layout just needs matching values:
 
 ```bash
-docker run --gpus all -p 9000:9000 -e LISTEN=0.0.0.0:9000 fish-speech-api
+docker run --gpus all \
+    -p 9000:9000 \
+    -e LISTEN=0.0.0.0:9000 \
+    -e LLAMA_CHECKPOINT_PATH=/models/my-checkpoint \
+    -e DECODER_CHECKPOINT_PATH=/models/my-checkpoint/codec.pth \
+    -v /data/fish-models:/models \
+    fish-speech-api
 ```
 
 ## Usage
@@ -79,6 +103,6 @@ with open("out.wav", "wb") as f:
 .
 ├── src/
 │   └── run.sh       # Startup script
-├── checkpoints/     # Downloaded at build time (gitignored)
+├── checkpoints/     # Downloaded on the host, bind-mounted at runtime (gitignored)
 └── Dockerfile
 ```
