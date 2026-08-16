@@ -93,6 +93,18 @@ with open("out.wav", "wb") as f:
     f.write(response.content)
 ```
 
+Get reference id list
+```
+curl.exe "http://127.0.0.1:8080/v1/references/list?format=json"
+```
+Add new reference
+```
+curl.exe -X DELETE "http://127.0.0.1:8080/v1/references/delete?format=json" -H "content-type: application/json" -d "{\"reference_id\":\"my-speaker\"}"
+```
+Delete reference
+```
+curl.exe -X DELETE "http://127.0.0.1:8080/v1/references/delete?format=json" -H "content-type: application/json" -d "{\"reference_id\":\"my-speaker\"}"
+```
 ## License
 
 [MIT](LICENSE.md)
